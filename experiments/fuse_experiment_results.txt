@@ -1,0 +1,18 @@
+Concord FUSE Latency Experiment
+Mount point: /tmp/concord-fuse-mount
+Inbox: /tmp/concord-fuse-mount/demo/inbox
+
+Warmup: 10 intents...
+Measuring: 20 intents...
+  10/20 intents processed
+  20/20 intents processed
+
+============================================================
+RESULTS (WITH FUSE)
+============================================================
+t0→t1 (substrate+FUSE)         min= 18.353 ms  p50= 19.772 ms  p95= 20.691 ms  max= 20.702 ms
+t1→t2 (agent work)             min=  1.096 ms  p50=  1.557 ms  p95=  2.185 ms  max=  2.185 ms
+t0→t2 (end-to-end)             min= 20.358 ms  p50= 21.155 ms  p95= 22.690 ms  max= 22.703 ms
+
+Total intents: 20
+Throughput: 47.0 intents/s

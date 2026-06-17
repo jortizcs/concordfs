@@ -1,0 +1,20 @@
+Concord FUSE + SLM Latency Experiment
+Model: Qwen2.5-Coder-3B-Instruct (Q4_K_M)
+Mount: /tmp/concord-fuse-mount-slm-parent
+
+Warmup: 10 intents...
+Measuring: 20 intents...
+  5/20 intents processed
+  10/20 intents processed
+  15/20 intents processed
+  20/20 intents processed
+
+============================================================
+RESULTS (SLM + FUSE)
+============================================================
+t0→t1 (substrate+FUSE)         min= 12.822 ms  p50= 13.563 ms  p95= 17.127 ms  max= 17.178 ms
+t1→t2 (model inference)        min=107.150 ms  p50=118.481 ms  p95=132.835 ms  max=133.398 ms
+t0→t2 (end-to-end)             min=120.779 ms  p50=132.173 ms  p95=146.297 ms  max=146.859 ms
+
+Total intents: 20
+Throughput: 7.6 intents/s

@@ -1,0 +1,19 @@
+Concord Latency Experiment
+Agent: demo
+Inbox: /tmp/concord/demo/inbox
+Events: /tmp/concord/demo/outbox/events.jsonl
+
+Warmup: 10 intents...
+Measuring: 20 intents...
+  10/20 intents processed
+  20/20 intents processed
+
+============================================================
+RESULTS
+============================================================
+t0→t1 (substrate)              min=  1.412 ms  p50=  2.321 ms  p95= 12.395 ms  max= 12.413 ms
+t1→t2 (agent work)             min= 97.935 ms  p50=104.634 ms  p95=216.146 ms  max=217.022 ms
+t0→t2 (end-to-end)             min=100.082 ms  p50=113.074 ms  p95=218.096 ms  max=218.950 ms
+
+Total intents: 20
+Throughput: 8.1 intents/s

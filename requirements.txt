@@ -1,0 +1,12 @@
+# ConcordFS v0.3.0 Python Dependencies
+
+# SDK
+watchdog>=3.0.0
+fusepy>=3.0.1  # FUSE filesystem mount layer (optional)
+
+# LangGraph integration (optional)
+# langgraph>=0.2.0
+
+# Testing
+pytest>=7.0
+pytest-asyncio>=0.21

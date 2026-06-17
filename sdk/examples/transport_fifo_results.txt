@@ -1,0 +1,32 @@
+=== FIFO Transport Benchmark ===
+Events: 10000
+Base path: /var/folders/sm/tmz1xbhx2_l_n7kvdfn0y0q80000gn/T/transport_fifo__a4qdwsv
+
+Warning: Timeout waiting for events. Received 9978/10000
+=== Results ===
+Total time: 10647.74 ms
+Events sent: 10000
+Events received: 10000
+
+Latency (μs):
+  Min:  110.54
+  p50:  1336.98
+  p95:  3304.46
+  p99:  3778.96
+  Max:  10012145.25
+  Mean: 23512.61
+
+Time to first event: 4.54 ms
+
+Throughput: 939.17 events/sec
+
+CPU time:
+  User:   0.1741 s
+  System: 0.3139 s
+  Total:  0.4880 s
+
+Context switches:
+  Voluntary:   23190
+  Involuntary: 0
+  Total:       23190
+

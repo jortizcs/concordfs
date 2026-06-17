@@ -1,0 +1,31 @@
+=== File Transport Benchmark ===
+Events: 1000
+Base path: /var/folders/sm/tmz1xbhx2_l_n7kvdfn0y0q80000gn/T/transport_file_z7ew6kg3
+
+=== Results ===
+Total time: 73.16 ms
+Events sent: 1000
+Events received: 1000
+
+Latency (μs):
+  Min:  278.25
+  p50:  6205.40
+  p95:  10428.00
+  p99:  11510.25
+  Max:  11953.21
+  Mean: 6020.99
+
+Time to first event: 11.70 ms
+
+Throughput: 13668.75 events/sec
+
+CPU time:
+  User:   0.0076 s
+  System: 0.0285 s
+  Total:  0.0361 s
+
+Context switches:
+  Voluntary:   1193
+  Involuntary: 0
+  Total:       1193
+

@@ -1,0 +1,31 @@
+=== Unix Domain Socket Transport Benchmark ===
+Events: 10000
+Base path: /var/folders/sm/tmz1xbhx2_l_n7kvdfn0y0q80000gn/T/transport_uds_pe78yugv
+
+=== Results ===
+Total time: 208.91 ms
+Events sent: 10000
+Events received: 10000
+
+Latency (μs):
+  Min:  10.38
+  p50:  129.35
+  p95:  494.29
+  p99:  778.13
+  Max:  1893.17
+  Mean: 171.24
+
+Time to first event: 0.13 ms
+
+Throughput: 47868.56 events/sec
+
+CPU time:
+  User:   0.0536 s
+  System: 0.0325 s
+  Total:  0.0861 s
+
+Context switches:
+  Voluntary:   6262
+  Involuntary: 0
+  Total:       6262
+
