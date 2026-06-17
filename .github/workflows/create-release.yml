@@ -1,0 +1,53 @@
+name: Create Release on Tag Push
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create source archive
+        run: |
+          git archive --format=tar.gz --prefix=concordfs-${{ steps.version.outputs.VERSION }}/ \
+            -o concordfs-${{ steps.version.outputs.VERSION }}-source.tar.gz \
+            ${{ github.ref }}
+
+      - name: Read CHANGELOG for release notes
+        id: changelog
+        run: |
+          VERSION_NUM="${{ steps.version.outputs.VERSION }}"
+          VERSION_NUM="${VERSION_NUM#v}"
+          NOTES=$(awk "/^## \[${VERSION_NUM}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="See [CHANGELOG](https://github.com/jortizcs/concordfs/blob/${{ steps.version.outputs.VERSION }}/CHANGELOG.md) for details."
+          fi
+          {
+            echo "NOTES<<NOTESEOF"
+            echo "$NOTES"
+            echo "NOTESEOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ steps.version.outputs.VERSION }} \
+            concordfs-${{ steps.version.outputs.VERSION }}-source.tar.gz \
+            --title "ConcordFS ${{ steps.version.outputs.VERSION }}" \
+            --notes "${{ steps.changelog.outputs.NOTES }}"
