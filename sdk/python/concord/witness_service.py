@@ -174,6 +174,8 @@ def main() -> int:
         help="authorize a Unix uid and assign its witnessed actor name",
     )
     arguments = parser.parse_args()
+    if not arguments.actor:
+        parser.error("at least one --actor UID=NAME authorization is required")
     if arguments.key.exists():
         signer = WitnessSigner.load_private_key(arguments.key)
     else:
