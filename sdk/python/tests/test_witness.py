@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 import socket
+import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -17,6 +19,37 @@ from concord.witness import (
     WitnessVerifier,
 )
 from concord.witness_service import WitnessClient, WitnessService
+
+
+def test_witness_import_does_not_require_optional_fusepy():
+    sdk_root = Path(__file__).resolve().parents[1]
+    code = """
+import importlib.abc
+import sys
+
+class BlockFuse(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "fuse":
+            raise ModuleNotFoundError("fusepy intentionally unavailable")
+        return None
+
+sys.meta_path.insert(0, BlockFuse())
+import concord
+from concord.witness import WitnessLedger
+
+assert concord.FUSE_AVAILABLE is False
+assert concord.ConcordFS is None
+assert WitnessLedger is not None
+"""
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(sdk_root)
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def _put(root: Path, content: bytes) -> str:
