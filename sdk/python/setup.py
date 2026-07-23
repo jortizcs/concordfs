@@ -10,6 +10,7 @@ setup(
     python_requires=">=3.11",
     install_requires=[
         "watchdog>=3.0.0",  # For inotify/fsevents
+        "cryptography>=42.0.0",  # Ed25519 witness signatures
     ],
     extras_require={
         "dev": [

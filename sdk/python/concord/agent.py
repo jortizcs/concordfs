@@ -92,7 +92,8 @@ class Agent:
     - Watches inbox/ via inotify/fsevents (1-2ms latency)
     - Handles intents via handle_intent() 
     - Appends events to outbox/events.jsonl (O_APPEND)
-    - Tombstones processed intents with .done suffix (exactly-once)
+    - Tombstones completed intents with .done suffix
+    - Provides durable at-least-once delivery; side effects require idempotency
     """
 
     def __init__(self, name: str, base_path: str = "/tmp/concord"):
@@ -129,7 +130,7 @@ class Agent:
             f.write(event.to_json() + "\n")
 
     def process_intent_file(self, path: Path) -> None:
-        """Process a single intent file with tombstone semantics"""
+        """Process an intent and tombstone it after the handler returns."""
         try:
             intent = Intent.from_file(path)
             self.handle_intent(intent)

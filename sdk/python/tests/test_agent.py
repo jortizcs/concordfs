@@ -66,8 +66,8 @@ def test_intent_processing():
         assert event["event"] == "ack"
 
 
-def test_exactly_once_semantics():
-    """Test tombstones prevent reprocessing"""
+def test_completion_tombstone_skips_completed_intent():
+    """Test completed tombstones are skipped after restart."""
     with tempfile.TemporaryDirectory() as tmpdir:
         agent = TestAgent("test", base_path=tmpdir)
         
@@ -92,13 +92,12 @@ def test_exactly_once_semantics():
         
         # Manually call poll once (not infinite loop)
         for path in agent2.inbox.iterdir():
-            if (path.is_file() and 
-                not str(path).endswith(".done") and
-                path.name not in agent2.seen):
-                agent2.seen.add(path.name)
+            if (path.is_file() and
+                not path.name.endswith((".done", ".error")) and
+                not path.name.startswith(".tmp")):
                 agent2.process_intent_file(path)
         
-        # Should not have processed the .done file
+        # A durable .done marker prevents replay after completed processing.
         assert len(agent2.handled) == 0
 
 

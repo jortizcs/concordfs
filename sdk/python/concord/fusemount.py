@@ -27,9 +27,10 @@ from collections import defaultdict
 
 try:
     from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
-except ImportError:
-    print("ERROR: fusepy not installed. Install with: pip install fusepy", file=sys.stderr)
-    sys.exit(1)
+except ImportError as exc:
+    raise ImportError(
+        "ConcordFS FUSE support requires fusepy; install it with `pip install fusepy`"
+    ) from exc
 
 
 class ConcordFS(LoggingMixIn, Operations):
@@ -319,4 +320,3 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("\n[ConcordFS] Interrupted")
         unmount_agent(args.mountpoint)
-
