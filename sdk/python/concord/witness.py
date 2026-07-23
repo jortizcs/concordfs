@@ -46,6 +46,7 @@ ROOT_EVENT_TYPES = frozenset(
     {"feedback_published", "prompt_assembled", "artifact_committed"}
 )
 ALLOWED_CAUSES = {
+    "feedback_published": frozenset({"gate_decision"}),
     "feedback_read": frozenset({"feedback_published"}),
     "prompt_assembled": frozenset({"feedback_read", "model_response_received"}),
     "model_request_sent": frozenset({"prompt_assembled"}),
@@ -366,7 +367,19 @@ class WitnessVerifier:
             errors.append(
                 f"{prefix} has disallowed parent type {parent.event_type}"
             )
-        if (
+        begins_repair = (
+            event.event_type == "feedback_published"
+            and parent.event_type == "gate_decision"
+        )
+        if begins_repair:
+            if (
+                parent.run_id != event.run_id
+                or event.attempt != parent.attempt + 1
+            ):
+                errors.append(
+                    f"{prefix} does not begin the next attempt for the same run"
+                )
+        elif (
             parent.run_id != event.run_id
             or parent.attempt != event.attempt
             or parent.correlation_id != event.correlation_id

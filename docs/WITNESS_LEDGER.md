@@ -75,7 +75,8 @@ before every append and refuses to extend an invalid ledger.
 For a guided model call, the wrapper should use one correlation identifier and
 record this chain.
 
-1. `feedback_published`
+1. `feedback_published`, causally linked to the prior attempt's
+   `gate_decision`
 2. `feedback_read` for the same feedback hash
 3. `prompt_assembled` with the feedback hash in
    `included_feedback_hashes`

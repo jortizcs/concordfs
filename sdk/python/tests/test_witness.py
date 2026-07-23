@@ -219,6 +219,68 @@ def test_prompt_must_bind_the_feedback_it_causally_follows(tmp_path: Path):
         )
 
 
+def test_feedback_can_begin_next_attempt_from_gate_decision(tmp_path: Path):
+    signer = WitnessSigner.generate()
+    ledger = WitnessLedger(tmp_path / "events.jsonl", signer)
+    prompt_hash = hashlib.sha256(b"prompt").hexdigest()
+    request_hash = hashlib.sha256(b"request").hexdigest()
+    response_hash = hashlib.sha256(b"response").hexdigest()
+    receipt_hash = hashlib.sha256(b"receipt").hexdigest()
+    decision_hash = hashlib.sha256(b"decision").hexdigest()
+    feedback_hash = hashlib.sha256(b"feedback").hexdigest()
+    common = {
+        "run_id": "run",
+        "attempt": 1,
+        "actor": "wrapper",
+        "process_id": "wrapper:1",
+        "correlation_id": "generation-1",
+    }
+    prompt = ledger.append(
+        **common,
+        event_type="prompt_assembled",
+        artifact_hashes={"prompt": prompt_hash},
+    )
+    request = ledger.append(
+        **common,
+        event_type="model_request_sent",
+        artifact_hashes={"request": request_hash},
+        causation_id=prompt.event_id,
+        metadata={"prompt_hash": prompt_hash},
+    )
+    response = ledger.append(
+        **common,
+        event_type="model_response_received",
+        artifact_hashes={"response": response_hash},
+        causation_id=request.event_id,
+        metadata={"generation_id": "gen-1", "request_hash": request_hash},
+    )
+    receipt = ledger.append(
+        **common,
+        event_type="receipt_submitted",
+        artifact_hashes={"receipt": receipt_hash},
+        causation_id=response.event_id,
+        metadata={"response_hash": response_hash},
+    )
+    decision = ledger.append(
+        **common,
+        event_type="gate_decision",
+        artifact_hashes={"decision": decision_hash},
+        causation_id=receipt.event_id,
+        metadata={"receipt_hash": receipt_hash, "status": "revise"},
+    )
+    feedback = ledger.append(
+        run_id="run",
+        attempt=2,
+        event_type="feedback_published",
+        actor="veritas",
+        process_id="veritas:2",
+        correlation_id="generation-2",
+        artifact_hashes={"feedback": feedback_hash},
+        causation_id=decision.event_id,
+    )
+    assert feedback.sequence == 6
+
+
 def test_existing_corruption_blocks_future_appends(tmp_path: Path):
     signer = WitnessSigner.generate()
     ledger_path = tmp_path / "events.jsonl"
