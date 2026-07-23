@@ -23,9 +23,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install SDK and test dependencies
-        # A regular wheel install is required because the integration clients
-        # run as separate Unix users that cannot traverse the runner checkout.
-        run: python -m pip install "sdk/python[dev]"
+        run: python -m pip install -e "sdk/python[dev]"
       - name: Run test suite
         working-directory: sdk/python
         run: python -m pytest -q
@@ -33,4 +31,9 @@ jobs:
         working-directory: sdk/python
         run: |
           chmod +x tests/integration_witness_multiuser.sh
+          # Editable installs point at the checkout. Permit the three isolated
+          # test users to traverse that path without making files writable.
+          sudo chmod o+x "$HOME" "$HOME/work" \
+            "$(dirname "$GITHUB_WORKSPACE")" "$GITHUB_WORKSPACE"
+          sudo find "$GITHUB_WORKSPACE/sdk" -type d -exec chmod o+rx {} +
           sudo --preserve-env=PATH,PYTHONPATH bash tests/integration_witness_multiuser.sh
