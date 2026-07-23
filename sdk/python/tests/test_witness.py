@@ -280,6 +280,131 @@ def test_invalid_causal_order_is_refused_before_append(tmp_path: Path):
         )
 
 
+def test_incomplete_episode_binds_last_response_and_can_be_anchored(
+    tmp_path: Path,
+):
+    signer = WitnessSigner.generate()
+    ledger_path = tmp_path / "events.jsonl"
+    anchor_path = tmp_path / "external/head.json"
+    ledger = WitnessLedger(ledger_path, signer)
+    prompt_hash = hashlib.sha256(b"prompt").hexdigest()
+    request_hash = hashlib.sha256(b"request").hexdigest()
+    response_hash = hashlib.sha256(b"response").hexdigest()
+    outcome_hash = hashlib.sha256(b"incomplete").hexdigest()
+    common = {
+        "run_id": "run",
+        "attempt": 1,
+        "actor": "request-wrapper",
+        "process_id": "wrapper:1",
+        "correlation_id": "generation-1",
+    }
+    prompt = ledger.append(
+        **common,
+        event_type="prompt_assembled",
+        artifact_hashes={"prompt": prompt_hash},
+    )
+    request = ledger.append(
+        **common,
+        event_type="model_request_sent",
+        artifact_hashes={"request": request_hash},
+        causation_id=prompt.event_id,
+        metadata={"prompt_hash": prompt_hash},
+    )
+    response = ledger.append(
+        **common,
+        event_type="model_response_received",
+        artifact_hashes={"response": response_hash},
+        causation_id=request.event_id,
+        metadata={"generation_id": "gen-1", "request_hash": request_hash},
+    )
+    incomplete = ledger.append(
+        run_id="run",
+        attempt=1,
+        event_type="episode_incomplete",
+        actor="independent-scorer",
+        process_id="scorer:1",
+        correlation_id="generation-1",
+        artifact_hashes={"outcome": outcome_hash},
+        causation_id=response.event_id,
+        metadata={
+            "status": "incomplete",
+            "independent_recomputation": False,
+            "response_hash": response_hash,
+        },
+    )
+    ledger.write_anchor(anchor_path)
+
+    report = WitnessVerifier(signer.public_bytes()).verify(
+        ledger_path,
+        anchor_path=anchor_path,
+        require_anchor=True,
+    )
+    assert report.valid, report.errors
+    assert report.events[-1] == incomplete
+
+
+def test_failed_provider_response_binds_request_without_generation_id(
+    tmp_path: Path,
+):
+    signer = WitnessSigner.generate()
+    ledger = WitnessLedger(tmp_path / "events.jsonl", signer)
+    prompt_hash = hashlib.sha256(b"prompt").hexdigest()
+    request_hash = hashlib.sha256(b"request").hexdigest()
+    response_hash = hashlib.sha256(b"provider error").hexdigest()
+    common = {
+        "run_id": "run",
+        "attempt": 1,
+        "actor": "request-wrapper",
+        "process_id": "wrapper:1",
+        "correlation_id": "generation-1",
+    }
+    prompt = ledger.append(
+        **common,
+        event_type="prompt_assembled",
+        artifact_hashes={"prompt": prompt_hash},
+    )
+    request = ledger.append(
+        **common,
+        event_type="model_request_sent",
+        artifact_hashes={"request": request_hash},
+        causation_id=prompt.event_id,
+        metadata={"prompt_hash": prompt_hash},
+    )
+    failure = ledger.append(
+        **common,
+        event_type="model_response_failed",
+        artifact_hashes={"response": response_hash},
+        causation_id=request.event_id,
+        metadata={
+            "request_hash": request_hash,
+            "error_code": 429,
+            "retryable": True,
+        },
+    )
+    assert failure.event_type == "model_response_failed"
+
+
+def test_incomplete_episode_cannot_claim_recomputation(tmp_path: Path):
+    signer = WitnessSigner.generate()
+    ledger = WitnessLedger(tmp_path / "events.jsonl", signer)
+    with pytest.raises(ValueError, match="incorrectly claims"):
+        ledger.append(
+            run_id="run",
+            attempt=1,
+            event_type="episode_incomplete",
+            actor="independent-scorer",
+            process_id="scorer:1",
+            correlation_id="generation-1",
+            artifact_hashes={
+                "outcome": hashlib.sha256(b"incomplete").hexdigest()
+            },
+            metadata={
+                "status": "incomplete",
+                "independent_recomputation": True,
+            },
+        )
+
+
 def test_prompt_must_bind_the_feedback_it_causally_follows(tmp_path: Path):
     signer = WitnessSigner.generate()
     ledger = WitnessLedger(tmp_path / "events.jsonl", signer)

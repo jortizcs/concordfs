@@ -37,14 +37,21 @@ EVENT_TYPES = frozenset(
         "prompt_assembled",
         "model_request_sent",
         "model_response_received",
+        "model_response_failed",
         "receipt_submitted",
         "gate_decision",
         "artifact_committed",
         "scorer_completed",
+        "episode_incomplete",
     }
 )
 ROOT_EVENT_TYPES = frozenset(
-    {"feedback_published", "prompt_assembled", "artifact_committed"}
+    {
+        "feedback_published",
+        "prompt_assembled",
+        "artifact_committed",
+        "episode_incomplete",
+    }
 )
 ALLOWED_CAUSES = {
     "feedback_published": frozenset({"gate_decision"}),
@@ -52,12 +59,14 @@ ALLOWED_CAUSES = {
     "prompt_assembled": frozenset({"feedback_read", "model_response_received"}),
     "model_request_sent": frozenset({"prompt_assembled"}),
     "model_response_received": frozenset({"model_request_sent"}),
+    "model_response_failed": frozenset({"model_request_sent"}),
     "receipt_submitted": frozenset({"model_response_received"}),
     "gate_decision": frozenset({"receipt_submitted"}),
     "artifact_committed": frozenset(
         {"model_response_received", "receipt_submitted"}
     ),
     "scorer_completed": frozenset({"gate_decision"}),
+    "episode_incomplete": frozenset({"model_response_received"}),
 }
 REQUIRED_ARTIFACTS = {
     "feedback_published": frozenset({"feedback"}),
@@ -65,6 +74,7 @@ REQUIRED_ARTIFACTS = {
     "prompt_assembled": frozenset({"prompt"}),
     "model_request_sent": frozenset({"request"}),
     "model_response_received": frozenset({"response"}),
+    "model_response_failed": frozenset({"response"}),
     "receipt_submitted": frozenset({"receipt"}),
     "gate_decision": frozenset({"decision"}),
     "artifact_committed": frozenset(),
@@ -78,6 +88,7 @@ REQUIRED_ARTIFACTS = {
             "recomputed_values",
         }
     ),
+    "episode_incomplete": frozenset({"outcome"}),
 }
 
 
@@ -486,6 +497,13 @@ class WitnessVerifier:
             event.metadata.get("generation_id", "")
         ):
             errors.append(f"{prefix} lacks a provider generation id")
+        if event.event_type == "episode_incomplete":
+            if event.metadata.get("status") != "incomplete":
+                errors.append(f"{prefix} has an invalid incomplete status")
+            if event.metadata.get("independent_recomputation") is not False:
+                errors.append(
+                    f"{prefix} incorrectly claims independent recomputation"
+                )
         included = event.metadata.get("included_feedback_hashes")
         if event.event_type == "prompt_assembled" and included is not None:
             if not isinstance(included, list) or any(
@@ -550,9 +568,11 @@ class WitnessVerifier:
             links = {
                 "model_request_sent": ("prompt_hash", "prompt"),
                 "model_response_received": ("request_hash", "request"),
+                "model_response_failed": ("request_hash", "request"),
                 "receipt_submitted": ("response_hash", "response"),
                 "gate_decision": ("receipt_hash", "receipt"),
                 "scorer_completed": ("decision_hash", "decision"),
+                "episode_incomplete": ("response_hash", "response"),
             }
             link = links.get(event.event_type)
             if link is not None:
