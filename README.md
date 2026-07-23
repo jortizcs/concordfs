@@ -33,7 +33,7 @@ python3 demo_feature_flag.py
 - `fsops` module implementing the durable commit protocol (write-fsync-rename-dir_fsync)
 - `contract_probe` for validating C1-C3 storage contract properties
 - `langgraph_saver` for LangGraph checkpoint integration via ConcordFS
-- Exactly-once processing (rename + tombstones)
+- Durable at-least-once inbox delivery with completion tombstones
 - Append-only event logs (`O_APPEND`)
 - Optional FUSE layer (requires fusepy + macFUSE/FUSE)
 
@@ -46,6 +46,12 @@ python3 demo_feature_flag.py
 - v0.3.0 results and manifest
 - ConcordFS evaluation benchmarks (3,700+ runs across two application domains)
 - SLM reasoning experiments
+
+## Witness ledger
+
+The development branch adds an Ed25519-signed, hash-chained witness ledger and an isolated Unix-socket writer for execution evidence. Replay detects tampering, truncation, reordering, replay, invalid causation, and missing CAS artifacts. The ledger authenticates observed events; semantic correctness still requires an independent checker. See [`docs/WITNESS_LEDGER.md`](docs/WITNESS_LEDGER.md).
+
+Inbox tombstones do not guarantee exactly-once side effects. A crash after a handler performs a side effect but before the `.done` rename can replay the intent. Side-effecting handlers must use idempotency keys or a prepare-and-commit protocol.
 
 ## Project Structure
 
@@ -122,7 +128,7 @@ python -m concord.contract_probe /path/to/mount
 
 | Semantic | POSIX Operation |
 |----------|-----------------|
-| Exactly-once queue | `rename` + `.done` tombstone |
+| At-least-once delivery | `.done` tombstone after successful handling |
 | Atomic commits | write-fsync-rename-dir_fsync |
 | Ordered events | `O_APPEND` on `events.jsonl` |
 | Observability | All state is files (`ls`, `cat`, `tail -f`) |

@@ -8,6 +8,11 @@ from .cas import CASBus, get_cas_bus
 from .orchestrator import PlanExecutor, Step
 from .fsops import atomic_write_bytes, atomic_write_text, atomic_write_json
 from .contract_probe import probe_storage_contract
+from .witness import (
+    VerificationReport, WitnessEvent, WitnessIntegrityError,
+    WitnessLedger, WitnessSigner, WitnessVerifier,
+)
+from .witness_service import WitnessClient, WitnessService
 
 # Mount manager (always available)
 from .mount import (
@@ -42,6 +47,10 @@ __all__ = [
     # Filesystem primitives
     "atomic_write_bytes", "atomic_write_text", "atomic_write_json",
     "probe_storage_contract",
+    # Authenticated execution evidence
+    "WitnessEvent", "VerificationReport", "WitnessIntegrityError",
+    "WitnessLedger", "WitnessSigner", "WitnessVerifier",
+    "WitnessClient", "WitnessService",
     # Mount management
     "AgentMount", "MountManager", "get_mount_manager",
     "mount_agent", "unmount_agent", "list_agents",

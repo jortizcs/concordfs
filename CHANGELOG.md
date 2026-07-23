@@ -2,6 +2,19 @@
 
 All notable changes to ConcordFS are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Ed25519-signed, hash-chained witness events with durable append and fail-closed replay verification
+- Unix-socket witness service that keeps the private key outside clients and derives peer process identity
+- Verification for event order, causation, artifact bindings, CAS availability, tampering, truncation, and replay
+
+### Changed
+
+- Corrected inbox semantics from general exactly-once processing to durable at-least-once delivery with completion tombstones
+- Documented the requirement for idempotency keys or prepare-and-commit around external side effects
+
 ## [0.3.0] - 2025-10-24
 
 ### Added
