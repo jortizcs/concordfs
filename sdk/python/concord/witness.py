@@ -218,6 +218,27 @@ class WitnessSigner:
             os.close(descriptor)
         _fsync_dir(path.parent)
 
+    def save_public_key(self, path: Path) -> None:
+        """Create a raw public-key file or verify an existing matching file."""
+        value = self.public_bytes()
+        if path.exists():
+            if path.read_bytes() != value:
+                raise WitnessIntegrityError(
+                    "existing witness public key does not match private key"
+                )
+            return
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        try:
+            view = memoryview(value)
+            while view:
+                written = os.write(descriptor, view)
+                view = view[written:]
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        _fsync_dir(path.parent)
+
     @classmethod
     def load_private_key(cls, path: Path) -> "WitnessSigner":
         mode = path.stat().st_mode & 0o777

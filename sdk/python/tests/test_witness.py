@@ -331,9 +331,12 @@ def test_unexpected_signing_key_is_rejected(tmp_path: Path):
 
 def test_private_key_permissions_are_enforced(tmp_path: Path):
     path = tmp_path / "witness.key"
+    public_path = tmp_path / "witness.key.pub"
     signer = WitnessSigner.generate()
     signer.save_private_key(path)
+    signer.save_public_key(public_path)
     assert path.stat().st_mode & 0o777 == 0o600
+    assert public_path.read_bytes() == signer.public_bytes()
     assert (
         WitnessSigner.load_private_key(path).public_bytes()
         == signer.public_bytes()
@@ -341,6 +344,9 @@ def test_private_key_permissions_are_enforced(tmp_path: Path):
     path.chmod(0o644)
     with pytest.raises(PermissionError, match="group/world"):
         WitnessSigner.load_private_key(path)
+    public_path.write_bytes(WitnessSigner.generate().public_bytes())
+    with pytest.raises(WitnessIntegrityError, match="does not match"):
+        signer.save_public_key(public_path)
 
 
 def test_service_derives_process_identity_and_keeps_key_server_side(

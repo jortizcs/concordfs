@@ -162,6 +162,11 @@ def main() -> int:
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--key", type=Path, required=True)
     parser.add_argument(
+        "--public-key-out",
+        type=Path,
+        help="raw Ed25519 public key output (default: KEY.pub)",
+    )
+    parser.add_argument(
         "--actor",
         action="append",
         default=[],
@@ -174,6 +179,10 @@ def main() -> int:
     else:
         signer = WitnessSigner.generate()
         signer.save_private_key(arguments.key)
+    public_key_path = arguments.public_key_out or Path(
+        str(arguments.key) + ".pub"
+    )
+    signer.save_public_key(public_key_path)
     actors: dict[int, str] = {}
     for assignment in arguments.actor:
         uid, separator, name = assignment.partition("=")

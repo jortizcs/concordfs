@@ -34,6 +34,10 @@ The service derives the client process identity from Unix peer credentials.
 The client-supplied `process_id` is discarded. Socket and directory permissions
 remain part of the deployment's trusted computing base.
 
+The service writes the raw Ed25519 public key to `KEY.pub` by default. Copy
+that public key into the read-only meta-verifier environment. The private key
+must remain readable only by the witness service account.
+
 ## Recorded events
 
 The v1 schema supports
