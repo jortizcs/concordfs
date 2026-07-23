@@ -25,6 +25,9 @@ python -m concord.witness_service \
   --socket /var/run/concord/witness.sock \
   --ledger /var/lib/concord/witness/events.jsonl \
   --key /var/lib/concord/witness/witness.ed25519 \
+  --artifact-root /var/lib/concord/cas \
+  --anchor /var/lib/external-checkpoints/run-head.json \
+  --socket-gid 2001 \
   --actor 1001=request-wrapper \
   --actor 1002=veritas \
   --actor 1003=independent-scorer
@@ -33,6 +36,12 @@ python -m concord.witness_service \
 The service derives the client process identity from Unix peer credentials.
 The client-supplied `process_id` is discarded. Socket and directory permissions
 remain part of the deployment's trusted computing base.
+
+The three client accounts must belong to the shared group identified by
+`--socket-gid`. The service creates the socket and its directory as group
+accessible (`0660` and setgid `2750`, respectively); the private key and ledger remain
+service-owned. The actor mapped as `independent-scorer` is the only actor
+allowed to request the terminal seal.
 
 The service writes the raw Ed25519 public key to `KEY.pub` by default. Copy
 that public key into the read-only meta-verifier environment. The private key
@@ -70,9 +79,23 @@ The replay verifier checks
 - exact cross-event artifact bindings
 - referenced CAS artifact availability and content hashes
 
-Corruption, truncation, reordering, replay, missing artifacts, or an unexpected
-signing key makes replay invalid. The writer also verifies existing history
-before every append and refuses to extend an invalid ledger.
+Corruption, truncation, reordering, replay, a missing ledger, missing artifacts,
+or an unexpected signing key makes replay invalid. The writer also verifies
+existing history before every append and refuses to extend an invalid ledger.
+
+## Terminal anchor
+
+A self-contained hash chain cannot detect deletion of complete trailing lines:
+the remaining prefix is internally valid. At the end of every run, the
+independent scorer must call `WitnessClient.seal()`. The witness service writes
+an Ed25519-signed commitment containing the terminal sequence and event hash to
+the separately protected `--anchor` path.
+
+The meta-verifier must call `WitnessVerifier.verify(..., anchor_path=...,
+require_anchor=True)`. Missing anchors and anchors that do not match the exact
+ledger head fail verification. The anchor must be retained outside the ledger
+writer's storage and deletion boundary; storing it beside the ledger provides
+no suffix-deletion protection.
 
 ## Model-call evidence
 

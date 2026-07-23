@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="concord",
-    version="0.3.0",
+    version="0.4.0a1",
     author="Jorge Ortiz",
     author_email="jorge.ortiz@rutgers.edu",
     description="Python SDK for Concord filesystem-native agent coordination",
@@ -24,4 +24,3 @@ setup(
         "Programming Language :: Python :: 3.11",
     ],
 )
-

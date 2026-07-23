@@ -27,6 +27,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 
 
 SCHEMA_VERSION = "concord.witness/v1"
+ANCHOR_SCHEMA_VERSION = "concord.witness.anchor/v1"
 GENESIS_HASH = "0" * 64
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 EVENT_TYPES = frozenset(
@@ -67,7 +68,16 @@ REQUIRED_ARTIFACTS = {
     "receipt_submitted": frozenset({"receipt"}),
     "gate_decision": frozenset({"decision"}),
     "artifact_committed": frozenset(),
-    "scorer_completed": frozenset({"score_report"}),
+    "scorer_completed": frozenset(
+        {
+            "score_report",
+            "scorer_code",
+            "scorer_config",
+            "scorer_inputs",
+            "scored_outputs",
+            "recomputed_values",
+        }
+    ),
 }
 
 
@@ -168,6 +178,40 @@ class WitnessIntegrityError(RuntimeError):
     """Raised when the ledger cannot support authenticated replay."""
 
 
+@dataclass(frozen=True)
+class WitnessAnchor:
+    """Externally retained signed commitment to a complete ledger head."""
+
+    schema_version: str
+    key_id: str
+    sequence: int
+    event_hash: str
+    timestamp_ns: int
+    anchor_hash: str
+    signature: str
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "WitnessAnchor":
+        return cls(
+            schema_version=str(value["schema_version"]),
+            key_id=str(value["key_id"]),
+            sequence=int(value["sequence"]),
+            event_hash=str(value["event_hash"]).lower(),
+            timestamp_ns=int(value["timestamp_ns"]),
+            anchor_hash=str(value["anchor_hash"]).lower(),
+            signature=str(value["signature"]),
+        )
+
+    def signing_body(self) -> dict[str, Any]:
+        value = asdict(self)
+        value.pop("anchor_hash")
+        value.pop("signature")
+        return value
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 class WitnessSigner:
     """Ed25519 signer held by the isolated witness process."""
 
@@ -250,6 +294,23 @@ class WitnessSigner:
         signature = self._private_key.sign(bytes.fromhex(event_hash))
         return base64.b64encode(signature).decode("ascii")
 
+    def create_anchor(self, sequence: int, event_hash: str) -> WitnessAnchor:
+        if sequence < 1 or not SHA256_RE.fullmatch(event_hash):
+            raise ValueError("anchor requires a non-empty valid ledger head")
+        body = {
+            "schema_version": ANCHOR_SCHEMA_VERSION,
+            "key_id": self.key_id,
+            "sequence": sequence,
+            "event_hash": event_hash,
+            "timestamp_ns": time.time_ns(),
+        }
+        anchor_hash = _hash_bytes(_canonical_json(body))
+        return WitnessAnchor(
+            **body,
+            anchor_hash=anchor_hash,
+            signature=self.sign(anchor_hash),
+        )
+
 
 class WitnessVerifier:
     """Verify signatures, ordering, causation, and referenced CAS artifacts."""
@@ -265,12 +326,19 @@ class WitnessVerifier:
         self.key_id = _hash_bytes(public_bytes)[:16]
 
     def verify(
-        self, ledger_path: Path, *, artifact_root: Path | None = None
+        self,
+        ledger_path: Path,
+        *,
+        artifact_root: Path | None = None,
+        anchor_path: Path | None = None,
+        require_anchor: bool = False,
     ) -> VerificationReport:
         errors: list[str] = []
         events: list[WitnessEvent] = []
         if not ledger_path.exists():
-            return VerificationReport(True, (), ())
+            return VerificationReport(
+                False, (), ("witness ledger is missing",)
+            )
         raw = ledger_path.read_bytes()
         if raw and not raw.endswith(b"\n"):
             errors.append("ledger is truncated or lacks a durable line terminator")
@@ -281,7 +349,58 @@ class WitnessVerifier:
             except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 errors.append(f"line {line_number} is not a valid witness event: {exc}")
         errors.extend(self._verify_events(events, artifact_root=artifact_root))
+        if not events:
+            errors.append("witness ledger contains no events")
+        errors.extend(
+            self._verify_anchor(
+                events,
+                anchor_path=anchor_path,
+                require_anchor=require_anchor,
+            )
+        )
         return VerificationReport(not errors, tuple(events), tuple(errors))
+
+    def _verify_anchor(
+        self,
+        events: list[WitnessEvent],
+        *,
+        anchor_path: Path | None,
+        require_anchor: bool,
+    ) -> list[str]:
+        if anchor_path is None:
+            return ["external witness anchor is required"] if require_anchor else []
+        if not anchor_path.is_file():
+            return ["external witness anchor is missing"]
+        try:
+            anchor = WitnessAnchor.from_dict(json.loads(anchor_path.read_text()))
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            return [f"external witness anchor is invalid: {exc}"]
+        errors: list[str] = []
+        if anchor.schema_version != ANCHOR_SCHEMA_VERSION:
+            errors.append("external witness anchor has unsupported schema")
+        if anchor.key_id != self.key_id:
+            errors.append("external witness anchor uses an unexpected key")
+        calculated = _hash_bytes(_canonical_json(anchor.signing_body()))
+        if calculated != anchor.anchor_hash:
+            errors.append("external witness anchor hash is invalid")
+        else:
+            try:
+                self.public_key.verify(
+                    base64.b64decode(anchor.signature, validate=True),
+                    bytes.fromhex(anchor.anchor_hash),
+                )
+            except (InvalidSignature, ValueError):
+                errors.append("external witness anchor signature is invalid")
+        if not events:
+            errors.append("external witness anchor cannot match an empty ledger")
+        elif (
+            anchor.sequence != len(events)
+            or anchor.event_hash != events[-1].event_hash
+        ):
+            errors.append(
+                "external witness anchor does not match the complete ledger head"
+            )
+        return errors
 
     def _verify_events(
         self,
@@ -498,7 +617,11 @@ class WitnessLedger:
         )
         try:
             fcntl.flock(lock_descriptor, fcntl.LOCK_EX)
-            prior = self.verifier.verify(self.path).require_valid()
+            prior = (
+                self.verifier.verify(self.path).require_valid()
+                if self.path.exists()
+                else ()
+            )
             previous_hash = prior[-1].event_hash if prior else GENESIS_HASH
             sequence = len(prior) + 1
             unsigned = {
@@ -551,3 +674,27 @@ class WitnessLedger:
         finally:
             fcntl.flock(lock_descriptor, fcntl.LOCK_UN)
             os.close(lock_descriptor)
+
+    def write_anchor(self, path: Path) -> WitnessAnchor:
+        """Atomically publish a terminal head outside the ledger directory.
+
+        The caller must retain this file in a separately protected location.
+        Existing anchors are never overwritten.
+        """
+        events = self.verifier.verify(self.path).require_valid()
+        anchor = self.signer.create_anchor(
+            len(events), events[-1].event_hash
+        )
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        encoded = _canonical_json(anchor.to_dict()) + b"\n"
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        try:
+            view = memoryview(encoded)
+            while view:
+                written = os.write(descriptor, view)
+                view = view[written:]
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        _fsync_dir(path.parent)
+        return anchor

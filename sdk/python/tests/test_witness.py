@@ -6,6 +6,7 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -173,6 +174,72 @@ def test_truncation_is_rejected(tmp_path: Path):
     report = WitnessVerifier(signer.public_bytes()).verify(ledger_path)
     assert not report.valid
     assert any("truncated" in error for error in report.errors)
+
+
+def test_missing_ledger_is_rejected(tmp_path: Path):
+    signer = WitnessSigner.generate()
+    report = WitnessVerifier(signer.public_bytes()).verify(
+        tmp_path / "missing.jsonl"
+    )
+    assert not report.valid
+    assert report.errors == ("witness ledger is missing",)
+
+
+def test_external_anchor_detects_complete_suffix_deletion(tmp_path: Path):
+    signer = WitnessSigner.generate()
+    ledger_path = tmp_path / "events.jsonl"
+    anchor_path = tmp_path / "external" / "head.json"
+    ledger = WitnessLedger(ledger_path, signer)
+    for attempt in (1, 2):
+        content = f"artifact-{attempt}".encode()
+        ledger.append(
+            run_id="run",
+            attempt=attempt,
+            event_type="artifact_committed",
+            actor="wrapper",
+            process_id="wrapper:1",
+            correlation_id=f"attempt-{attempt}",
+            artifact_hashes={"output": hashlib.sha256(content).hexdigest()},
+        )
+    ledger.write_anchor(anchor_path)
+
+    complete = WitnessVerifier(signer.public_bytes()).verify(
+        ledger_path,
+        anchor_path=anchor_path,
+        require_anchor=True,
+    )
+    assert complete.valid, complete.errors
+
+    lines = ledger_path.read_bytes().splitlines(keepends=True)
+    ledger_path.write_bytes(b"".join(lines[:-1]))
+    truncated = WitnessVerifier(signer.public_bytes()).verify(
+        ledger_path,
+        anchor_path=anchor_path,
+        require_anchor=True,
+    )
+    assert not truncated.valid
+    assert any("complete ledger head" in error for error in truncated.errors)
+
+
+def test_required_external_anchor_must_exist(tmp_path: Path):
+    signer = WitnessSigner.generate()
+    ledger_path = tmp_path / "events.jsonl"
+    WitnessLedger(ledger_path, signer).append(
+        run_id="run",
+        attempt=1,
+        event_type="artifact_committed",
+        actor="wrapper",
+        process_id="wrapper:1",
+        correlation_id="attempt-1",
+        artifact_hashes={"output": hashlib.sha256(b"x").hexdigest()},
+    )
+    report = WitnessVerifier(signer.public_bytes()).verify(
+        ledger_path,
+        anchor_path=tmp_path / "absent-anchor.json",
+        require_anchor=True,
+    )
+    assert not report.valid
+    assert "external witness anchor is missing" in report.errors
 
 
 def test_missing_artifact_is_rejected(tmp_path: Path):
@@ -393,7 +460,8 @@ def test_service_derives_process_identity_and_keeps_key_server_side(
         probe.close()
     signer = WitnessSigner.generate()
     ledger_path = tmp_path / "events.jsonl"
-    socket_path = tmp_path / "witness.sock"
+    socket_root = Path(tempfile.mkdtemp(prefix="cw-", dir="/tmp"))
+    socket_path = socket_root / "w.sock"
     service = WitnessService(
         socket_path,
         WitnessLedger(ledger_path, signer),
@@ -405,6 +473,7 @@ def test_service_derives_process_identity_and_keeps_key_server_side(
         if socket_path.exists():
             break
         time.sleep(0.01)
+    assert socket_path.stat().st_mode & 0o777 == 0o660
     feedback = hashlib.sha256(b"feedback").hexdigest()
     event = WitnessClient(socket_path).append(
         run_id="run",
@@ -420,3 +489,50 @@ def test_service_derives_process_identity_and_keeps_key_server_side(
     assert WitnessVerifier(signer.public_bytes()).verify(ledger_path).valid
     thread.join(timeout=2)
     assert not thread.is_alive()
+    socket_root.rmdir()
+
+
+def test_only_independent_scorer_actor_can_seal_service_ledger(tmp_path: Path):
+    signer = WitnessSigner.generate()
+    ledger_path = tmp_path / "events.jsonl"
+    socket_root = Path(tempfile.mkdtemp(prefix="cw-", dir="/tmp"))
+    socket_path = socket_root / "w.sock"
+    anchor_path = tmp_path / "external-anchor" / "head.json"
+    service = WitnessService(
+        socket_path,
+        WitnessLedger(ledger_path, signer),
+        actor_by_uid={os.getuid(): "independent-scorer"},
+        anchor_path=anchor_path,
+        artifact_root=tmp_path / "cas",
+    )
+    thread = threading.Thread(
+        target=lambda: service._serve(max_connections=2)
+    )
+    thread.start()
+    for _ in range(100):
+        if socket_path.exists():
+            break
+        time.sleep(0.01)
+    client = WitnessClient(socket_path)
+    committed = client.append_artifacts(
+        run_id="run",
+        attempt=1,
+        event_type="artifact_committed",
+        actor="ignored",
+        correlation_id="attempt-1",
+        artifacts={"output": b"x"},
+    )
+    assert committed["artifact_hashes"]["output"] == hashlib.sha256(b"x").hexdigest()
+    anchor = client.seal()
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+    assert anchor_path.is_file()
+    assert anchor["sequence"] == 1
+    report = WitnessVerifier(signer.public_bytes()).verify(
+        ledger_path,
+        artifact_root=tmp_path / "cas",
+        anchor_path=anchor_path,
+        require_anchor=True,
+    )
+    assert report.valid, report.errors
+    socket_root.rmdir()

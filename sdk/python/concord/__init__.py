@@ -9,7 +9,7 @@ from .orchestrator import PlanExecutor, Step
 from .fsops import atomic_write_bytes, atomic_write_text, atomic_write_json
 from .contract_probe import probe_storage_contract
 from .witness import (
-    VerificationReport, WitnessEvent, WitnessIntegrityError,
+    VerificationReport, WitnessAnchor, WitnessEvent, WitnessIntegrityError,
     WitnessLedger, WitnessSigner, WitnessVerifier,
 )
 from .witness_service import WitnessClient, WitnessService
@@ -36,7 +36,7 @@ except ImportError:
     LANGGRAPH_AVAILABLE = False
     ConcordFSCheckpointSaver = None
 
-__version__ = "0.3.0"
+__version__ = "0.4.0a1"
 __all__ = [
     # Core
     "Agent", "Intent", "Event", "Router",
@@ -48,7 +48,7 @@ __all__ = [
     "atomic_write_bytes", "atomic_write_text", "atomic_write_json",
     "probe_storage_contract",
     # Authenticated execution evidence
-    "WitnessEvent", "VerificationReport", "WitnessIntegrityError",
+    "WitnessEvent", "WitnessAnchor", "VerificationReport", "WitnessIntegrityError",
     "WitnessLedger", "WitnessSigner", "WitnessVerifier",
     "WitnessClient", "WitnessService",
     # Mount management
@@ -59,4 +59,3 @@ __all__ = [
     # LangGraph (optional)
     "ConcordFSCheckpointSaver", "LANGGRAPH_AVAILABLE",
 ]
-

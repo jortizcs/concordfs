@@ -1,88 +1,14 @@
-Concord v0.3.0
-Release Date: October 24, 2025
-Status: Production Ready - Filesystem-Native Coordination Substrate
+Concord v0.4.0-alpha.1
+Release status: Experimental
 
-## Current Version: v0.3.0
+This version adds authenticated witness-ledger primitives. It is not a
+production-readiness declaration.
 
-### What's Working
+Delivery semantics are durable at-least-once with completion tombstones.
+Exactly-once external side effects require application-level idempotency keys
+or a prepare-and-commit protocol.
 
-Python SDK with Agent base class
-File notifications (inotify/fsevents) with sub-2ms latency
-Mount abstraction layer with standardized directory structure
-Optional FUSE filesystem layer
-Content-addressable storage (CAS) bus with atomic writes
-Multi-agent orchestration with PlanExecutor
-Exactly-once semantics (rename + tombstones)
-Append-only event logs (O_APPEND)
-Policy enforcement (no_network, max_tokens)
-Dependency management and template resolution
-Comprehensive test suite (pytest)
-Transport benchmarks (file 5.6ms, FIFO 1.3ms, UDS 0.13ms p50)
-4-agent pipeline (50ms time-to-green, 100% reliability)
-Complete 2x2 performance matrix (SLM + FUSE)
-Atomic filesystem commit protocol (write-fsync-rename-dir_fsync)
-Storage contract probe (C1-C3 validation)
-LangGraph checkpoint saver integration
-ConcordFS evaluation across 3,700+ experiments (see papers/)
-
-### What's NOT Yet Implemented
-
-Model router daemon
-Remote agent coordination (SSH/9P)
-Security sandboxing (cgroups/namespaces)
-TLA+ formal specification
-Production FUSE implementation (Rust-based)
-
-## Version History
-
-### v0.3.0 (October 24, 2025)
-- Complete 2x2 performance matrix (SLM+FUSE at 132.2ms)
-- 4-agent multi-agent pipeline (50ms time-to-green, 100% reliability)
-- Transport benchmarks (file, FIFO, UDS)
-- Atomic filesystem commit protocol (fsops.py)
-- Storage contract probe for C1-C3 validation (contract_probe.py)
-- LangGraph checkpoint saver (langgraph_saver.py)
-- CAS bus upgraded to atomic writes
-- PlanExecutor with storage contract enforcement
-
-### v0.2.0 (October 21, 2025)
-- Added mount abstraction layer (mount.py)
-- Added optional FUSE filesystem (fusemount.py)
-- File notifications eliminating polling bottleneck
-- Multi-agent coordination validated (320ms for 4-step pipeline)
-- CAS bus for zero-copy artifact passing
-- Comprehensive documentation and testing
-
-### v0.1.0 (October 20, 2025)
-- Initial prototype with Agent, CAS, Orchestrator
-- Polling-based inbox watching (10ms latency)
-- Basic multi-agent support
-- Experimental validation with SLM
-
-## Quick Start
-
-```bash
-# Install
-cd sdk/python && pip install -e .
-
-# Run storage contract probe
-python -m concord.contract_probe /tmp/concord
-
-# Run multi-agent demo
-cd sdk/examples/multiagent
-./start_agents.sh
-python3 demo_feature_flag.py
-
-# Run transport benchmarks
-cd sdk/examples
-python benchmark_transport_file.py --events 10000
-```
-
-## Documentation
-
-- RELEASE_NOTES_v0.3.0.md - Complete release notes
-- V0.2.0_RELEASE_SUMMARY.md - v0.2.0 release notes
-- MOUNT_LAYER_V0.2.0.md - Mount layer documentation
-- experiments/concord_v0.3.0_manifest.md - v0.3.0 experiment manifest
-- MULTIAGENT_RESULTS.md - Multi-agent experiment details
-- EXPERIMENTS_COMPLETED.md - Summary of all experiments
+The witness ledger authenticates observations but does not establish semantic
+correctness, scorer independence, causal influence, or deployment isolation by
+itself. Complete-suffix deletion is detected only when verification requires a
+separately retained signed terminal anchor.
